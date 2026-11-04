@@ -11,6 +11,7 @@ A lightweight Windows screenshot utility built with Python and Tkinter.
 - Configurable screenshot folder
 - Optional Windows startup shortcut
 - Preview before saving
+- System-tray icon with **Open ScreenShutter** and **Exit** actions
 
 ## Requirements
 
@@ -19,6 +20,7 @@ A lightweight Windows screenshot utility built with Python and Tkinter.
 - Tkinter (included with standard Windows Python installers)
 - Pillow
 - pywin32 (used to create/remove the Windows startup shortcut)
+- pystray (system-tray icon and menu)
 
 Install dependencies:
 
@@ -32,7 +34,7 @@ Run:
 py app.py
 ```
 
-Closing the settings window hides ScreenShutter in the background. Press the configured global shortcut to reopen it. Use the **Exit** button in the main window to quit the application.
+Closing the settings window hides ScreenShutter to the Windows system tray. Use the tray icon's **Open ScreenShutter** action or press the configured global shortcut to reopen it. Choose **Exit** from the tray menu (or use the **Exit** button in the main window) to quit the application.
 
 ## Notes
 
