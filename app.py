@@ -5,6 +5,7 @@ import queue
 import re
 import threading
 import time
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -12,6 +13,8 @@ from tkinter import filedialog, messagebox, ttk
 
 import pystray
 from PIL import Image, ImageDraw, ImageGrab
+
+from license_text import LICENSE_TEXT
 
 APP_NAME = "ScreenShutter"
 DEFAULT_HOTKEY = "Shift+Print Screen"
@@ -195,6 +198,7 @@ class ScreenShutter:
         self.hotkey_queue = queue.Queue()
         self.tray_icon = None
         self.tray_thread = None
+        self.about_window = None
 
         self.load_settings()
         self.build_ui()
@@ -264,7 +268,72 @@ class ScreenShutter:
         footer.pack(fill="x", pady=(5, 0))
         ttk.Label(footer, text="Close this window to keep ScreenShutter running. Use Fully Exit to quit completely.",
                   foreground="#666", wraplength=360).pack(side="left", anchor="w")
+        ttk.Button(footer, text="About", command=self.show_about).pack(side="right", padx=(0, 6))
         ttk.Button(footer, text="Fully Exit", command=self.close).pack(side="right")
+
+    def show_about(self):
+        if self.about_window and self.about_window.winfo_exists():
+            self.about_window.deiconify()
+            self.about_window.lift()
+            self.about_window.focus_force()
+            return
+
+        window = tk.Toplevel(self.root)
+        self.about_window = window
+        window.title("About ScreenShutter")
+        window.geometry("760x640")
+        window.minsize(560, 420)
+        window.transient(self.root)
+
+        heading = ttk.Frame(window, padding=(16, 14, 16, 8))
+        heading.pack(fill="x")
+        ttk.Label(heading, text="ScreenShutter", font=("Segoe UI", 17, "bold")).pack(anchor="w")
+        ttk.Label(heading, text="A simple Windows screenshot tool").pack(anchor="w", pady=(2, 0))
+        ttk.Label(heading, text="Licensed under the GNU General Public License, version 3.").pack(
+            anchor="w", pady=(6, 0)
+        )
+
+        license_frame = ttk.LabelFrame(window, text="GNU General Public License v3", padding=8)
+        license_frame.pack(fill="both", expand=True, padx=16, pady=(4, 10))
+        license_scroll = ttk.Scrollbar(license_frame)
+        license_scroll.pack(side="right", fill="y")
+        license_view = tk.Text(
+            license_frame,
+            wrap="word",
+            font=("Consolas", 9),
+            padx=8,
+            pady=8,
+            yscrollcommand=license_scroll.set,
+            undo=False,
+        )
+        license_view.pack(side="left", fill="both", expand=True)
+        license_scroll.configure(command=license_view.yview)
+        license_view.insert("1.0", LICENSE_TEXT)
+        license_view.configure(state="disabled")
+
+        issue_frame = ttk.Frame(window, padding=(16, 0, 16, 12))
+        issue_frame.pack(fill="x")
+        ttk.Label(issue_frame, text="Found a problem? Please report it here:").pack(anchor="w")
+        issue_link = ttk.Label(
+            issue_frame,
+            text="https://github.com/awkbashgrepsed/screenshutter/issues",
+            foreground="#0969da",
+            cursor="hand2",
+        )
+        issue_link.pack(anchor="w", pady=(3, 8))
+        issue_link.bind(
+            "<Button-1>",
+            lambda _event: webbrowser.open_new_tab(
+                "https://github.com/awkbashgrepsed/screenshutter/issues"
+            ),
+        )
+        ttk.Button(issue_frame, text="Close", command=window.destroy).pack(side="right")
+
+        def clear_about_reference(_event=None):
+            self.about_window = None
+
+        window.bind("<Destroy>", lambda event: clear_about_reference() if event.widget is window else None)
+        window.protocol("WM_DELETE_WINDOW", window.destroy)
 
     def update_quality_label(self, _value=None):
         self.quality_label.configure(text=str(int(float(self.quality.get()))))
@@ -532,23 +601,36 @@ class ScreenShutter:
             messagebox.showerror("Save failed", str(exc))
 
     def startup_link(self):
-        return Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "ScreenShutter.lnk"
+        import win32com.client
+
+        shell = win32com.client.Dispatch("WScript.Shell")
+        return Path(shell.SpecialFolders("Startup")) / "ScreenShutter.lnk"
 
     def toggle_startup(self):
         try:
+            import sys
+            import win32com.client
+
+            shell = win32com.client.Dispatch("WScript.Shell")
             link = self.startup_link()
             if self.startup.get():
-                import sys
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                shortcut = shell.CreateShortCut(str(link))
-                shortcut.Targetpath = sys.executable
                 if "__compiled__" in globals():
-                    shortcut.Arguments = ""
-                    shortcut.WorkingDirectory = str(Path(sys.executable).resolve().parent)
+                    # In Nuitka onefile mode sys.argv[0] is the outer executable
+                    # the user launched; sys.executable may refer to its runtime.
+                    target = Path(sys.argv[0]).resolve()
+                    arguments = ""
+                    working_directory = target.parent
                 else:
-                    shortcut.Arguments = f'"{Path(__file__).resolve()}"'
-                    shortcut.WorkingDirectory = str(Path(__file__).resolve().parent)
+                    target = Path(sys.executable).resolve()
+                    script = Path(__file__).resolve()
+                    arguments = f'"{script}"'
+                    working_directory = script.parent
+
+                link.parent.mkdir(parents=True, exist_ok=True)
+                shortcut = shell.CreateShortCut(str(link))
+                shortcut.Targetpath = str(target)
+                shortcut.Arguments = arguments
+                shortcut.WorkingDirectory = str(working_directory)
                 shortcut.Description = "ScreenShutter screenshot utility"
                 shortcut.Save()
             elif link.exists():
