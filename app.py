@@ -1,0 +1,424 @@
+import ctypes
+import os
+import queue
+import re
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+from PIL import ImageGrab
+
+APP_NAME = "ScreenShutter"
+DEFAULT_HOTKEY = "Shift+Print Screen"
+MOD_ALT = 0x0001
+MOD_CONTROL = 0x0002
+MOD_SHIFT = 0x0004
+MOD_WIN = 0x0008
+MOD_NOREPEAT = 0x4000
+WM_HOTKEY = 0x0312
+WM_QUIT = 0x0012
+HOTKEY_ID = 1
+
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
+
+def parse_hotkey(spec):
+    parts = [p.strip().lower() for p in spec.split("+") if p.strip()]
+    modifiers = 0
+    key_name = None
+    for part in parts:
+        if part in ("ctrl", "control"):
+            modifiers |= MOD_CONTROL
+        elif part == "shift":
+            modifiers |= MOD_SHIFT
+        elif part == "alt":
+            modifiers |= MOD_ALT
+        elif part in ("win", "windows", "super"):
+            modifiers |= MOD_WIN
+        else:
+            if key_name is not None:
+                raise ValueError("Use one non-modifier key in the shortcut.")
+            key_name = part
+
+    if not key_name:
+        raise ValueError("The shortcut needs a key, for example Shift+Print Screen.")
+
+    aliases = {
+        "print screen": 0x2C, "printscreen": 0x2C, "prtsc": 0x2C,
+        "space": 0x20, "enter": 0x0D, "escape": 0x1B,
+        "tab": 0x09, "delete": 0x2E, "insert": 0x2D,
+        "home": 0x24, "end": 0x23, "pageup": 0x21, "pagedown": 0x22,
+        "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27,
+    }
+    if key_name in aliases:
+        vk = aliases[key_name]
+    elif re.fullmatch(r"f(?:[1-9]|1[0-2])", key_name):
+        vk = 0x70 + int(key_name[1:]) - 1
+    elif len(key_name) == 1 and key_name.isalnum():
+        vk = ord(key_name.upper())
+    else:
+        raise ValueError("Unsupported key. Try a letter, number, F1-F12, or Print Screen.")
+    return modifiers | MOD_NOREPEAT, vk
+
+
+class HotkeyListener:
+    def __init__(self, callback):
+        self.callback = callback
+        self.thread = None
+        self.thread_id = None
+        self.ready = threading.Event()
+        self.error = None
+        self.running = False
+
+    def start(self, spec):
+        self.stop()
+        modifiers, vk = parse_hotkey(spec)
+        self.ready.clear()
+        self.error = None
+        self.running = True
+
+        def worker():
+            self.thread_id = kernel32.GetCurrentThreadId()
+            if not user32.RegisterHotKey(None, HOTKEY_ID, modifiers, vk):
+                self.error = ctypes.WinError()
+                self.ready.set()
+                return
+            self.ready.set()
+            msg = ctypes.wintypes.MSG()
+            while self.running:
+                result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                if result <= 0:
+                    break
+                if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+                    self.callback()
+            user32.UnregisterHotKey(None, HOTKEY_ID)
+
+        self.thread = threading.Thread(target=worker, daemon=True)
+        self.thread.start()
+        self.ready.wait(timeout=2)
+        if self.error:
+            raise self.error
+
+    def stop(self):
+        self.running = False
+        if self.thread_id:
+            user32.PostThreadMessageW(self.thread_id, WM_QUIT, 0, 0)
+        self.thread_id = None
+
+
+class ScreenShutter:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("ScreenShutter")
+        self.root.geometry("520x440")
+        self.root.minsize(480, 400)
+        self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
+
+        self.settings_dir = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
+        self.settings_dir.mkdir(parents=True, exist_ok=True)
+        self.settings_file = self.settings_dir / "settings.ini"
+
+        self.save_dir = tk.StringVar(value=str(Path.home() / "Pictures" / "ScreenShutter"))
+        self.image_format = tk.StringVar(value="PNG")
+        self.quality = tk.IntVar(value=90)
+        self.hotkey = tk.StringVar(value=DEFAULT_HOTKEY)
+        self.startup = tk.BooleanVar(value=False)
+        self.status = tk.StringVar(value="Ready")
+        self.hotkey_listener = HotkeyListener(self.hotkey_pressed)
+        self.hotkey_queue = queue.Queue()
+
+        self.load_settings()
+        self.build_ui()
+        self.apply_format_state()
+        self.root.after(100, self.process_queue)
+        self.root.after(300, self.register_hotkey)
+
+    def build_ui(self):
+        outer = ttk.Frame(self.root, padding=18)
+        outer.pack(fill="both", expand=True)
+
+        ttk.Label(outer, text="ScreenShutter", font=("Segoe UI", 19, "bold")).pack(anchor="w")
+        ttk.Label(outer, text="A simple Windows screenshot tool", foreground="#666").pack(anchor="w", pady=(0, 16))
+
+        capture = ttk.LabelFrame(outer, text="Take a screenshot", padding=12)
+        capture.pack(fill="x", pady=(0, 12))
+        row = ttk.Frame(capture)
+        row.pack(fill="x")
+        ttk.Button(row, text="Full screen", command=self.capture_full).pack(side="left", expand=True, fill="x", padx=(0, 5))
+        ttk.Button(row, text="Active window", command=self.capture_window).pack(side="left", expand=True, fill="x", padx=5)
+        ttk.Button(row, text="Select region", command=self.select_region).pack(side="left", expand=True, fill="x", padx=(5, 0))
+
+        settings = ttk.LabelFrame(outer, text="Settings", padding=12)
+        settings.pack(fill="both", expand=True)
+
+        ttk.Label(settings, text="Save screenshots to").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Entry(settings, textvariable=self.save_dir).grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Button(settings, text="Browse…", command=self.browse_folder).grid(row=0, column=2)
+
+        ttk.Label(settings, text="Image format").grid(row=1, column=0, sticky="w", pady=5)
+        formats = ("PNG", "JPEG", "WEBP", "BMP", "TIFF")
+        format_box = ttk.Combobox(settings, textvariable=self.image_format, values=formats, state="readonly", width=12)
+        format_box.grid(row=1, column=1, sticky="w", padx=8)
+        format_box.bind("<<ComboboxSelected>>", lambda _e: self.apply_format_state())
+
+        ttk.Label(settings, text="Quality").grid(row=2, column=0, sticky="w", pady=5)
+        quality_row = ttk.Frame(settings)
+        quality_row.grid(row=2, column=1, columnspan=2, sticky="ew", padx=8)
+        self.quality_scale = ttk.Scale(quality_row, from_=1, to=100, variable=self.quality, command=self.update_quality_label)
+        self.quality_scale.pack(side="left", fill="x", expand=True)
+        self.quality_label = ttk.Label(quality_row, text="90", width=4)
+        self.quality_label.pack(side="left", padx=(8, 0))
+
+        ttk.Label(settings, text="Global shortcut").grid(row=3, column=0, sticky="w", pady=5)
+        shortcut_row = ttk.Frame(settings)
+        shortcut_row.grid(row=3, column=1, columnspan=2, sticky="ew", padx=8)
+        ttk.Entry(shortcut_row, textvariable=self.hotkey).pack(side="left", fill="x", expand=True)
+        ttk.Button(shortcut_row, text="Apply", command=self.register_hotkey).pack(side="left", padx=(6, 0))
+
+        ttk.Checkbutton(settings, text="Start ScreenShutter with Windows", variable=self.startup,
+                        command=self.toggle_startup).grid(row=4, column=1, columnspan=2, sticky="w", pady=8)
+        settings.columnconfigure(1, weight=1)
+
+        ttk.Label(outer, textvariable=self.status, anchor="w").pack(fill="x", pady=(12, 0))
+        ttk.Label(outer, text="Tip: close this window to keep ScreenShutter running in the background.",
+                  foreground="#666", wraplength=470).pack(anchor="w", pady=(5, 0))
+
+    def update_quality_label(self, _value=None):
+        self.quality_label.configure(text=str(int(float(self.quality.get()))))
+
+    def apply_format_state(self):
+        enabled = self.image_format.get() in ("JPEG", "WEBP")
+        self.quality_scale.configure(state="normal" if enabled else "disabled")
+
+    def browse_folder(self):
+        folder = filedialog.askdirectory(initialdir=self.save_dir.get() or str(Path.home()))
+        if folder:
+            self.save_dir.set(folder)
+
+    def register_hotkey(self):
+        try:
+            self.hotkey_listener.start(self.hotkey.get())
+            self.status.set(f"Shortcut active: {self.hotkey.get()}")
+        except Exception as exc:
+            self.status.set(f"Could not register shortcut: {exc}")
+            messagebox.showerror("Shortcut error", f"Could not register {self.hotkey.get()}.
+
+{exc}")
+
+    def hotkey_pressed(self):
+        self.hotkey_queue.put("show")
+
+    def process_queue(self):
+        try:
+            while True:
+                self.hotkey_queue.get_nowait()
+                self.root.after(0, self.show_window)
+        except queue.Empty:
+            pass
+        self.root.after(100, self.process_queue)
+
+    def show_window(self):
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def hide_window(self):
+        self.save_settings()
+        self.root.withdraw()
+
+    def capture_full(self):
+        self.root.withdraw()
+        self.root.after(250, self._capture_full_delayed)
+
+    def _capture_full_delayed(self):
+        try:
+            image = ImageGrab.grab(all_screens=True)
+            self.show_preview(image)
+        except Exception as exc:
+            self.show_window()
+            messagebox.showerror("Capture failed", str(exc))
+
+    def capture_window(self):
+        self.root.withdraw()
+        self.root.after(250, self._capture_window_delayed)
+
+    def _capture_window_delayed(self):
+        try:
+            hwnd = user32.GetForegroundWindow()
+            rect = ctypes.wintypes.RECT()
+            if not hwnd or not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                raise RuntimeError("Could not determine the active window bounds.")
+            image = ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom), all_screens=True)
+            self.show_preview(image)
+        except Exception as exc:
+            self.show_window()
+            messagebox.showerror("Capture failed", str(exc))
+
+    def select_region(self):
+        self.root.withdraw()
+        self.root.after(250, self._open_region_selector)
+
+    def _open_region_selector(self):
+        try:
+            screenshot = ImageGrab.grab(all_screens=True)
+            overlay = tk.Toplevel(self.root)
+            overlay.overrideredirect(True)
+            overlay.attributes("-topmost", True)
+            overlay.attributes("-fullscreen", True)
+            overlay.attributes("-alpha", 0.28)
+            overlay.configure(bg="black")
+            canvas = tk.Canvas(overlay, cursor="cross", bg="black", highlightthickness=0)
+            canvas.pack(fill="both", expand=True)
+            start = {"x": 0, "y": 0, "rect": None}
+
+            def down(event):
+                start["x"], start["y"] = event.x_root, event.y_root
+                start["rect"] = canvas.create_rectangle(event.x, event.y, event.x, event.y,
+                                                         outline="#00aaff", width=2)
+
+            def move(event):
+                if start["rect"]:
+                    x0 = start["x"] - overlay.winfo_rootx()
+                    y0 = start["y"] - overlay.winfo_rooty()
+                    canvas.coords(start["rect"], x0, y0, event.x, event.y)
+
+            def up(event):
+                x1, y1 = start["x"], start["y"]
+                x2, y2 = event.x_root, event.y_root
+                overlay.destroy()
+                left, right = sorted((x1, x2))
+                top, bottom = sorted((y1, y2))
+                if right - left < 3 or bottom - top < 3:
+                    self.show_window()
+                    return
+                try:
+                    self.show_preview(ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True))
+                except Exception as exc:
+                    self.show_window()
+                    messagebox.showerror("Capture failed", str(exc))
+
+            overlay.bind("<ButtonPress-1>", down)
+            overlay.bind("<B1-Motion>", move)
+            overlay.bind("<ButtonRelease-1>", up)
+            overlay.bind("<Escape>", lambda _e: (overlay.destroy(), self.show_window()))
+            overlay.focus_force()
+        except Exception as exc:
+            self.show_window()
+            messagebox.showerror("Selection failed", str(exc))
+
+    def show_preview(self, image):
+        self.root.deiconify()
+        self.root.lift()
+        preview = tk.Toplevel(self.root)
+        preview.title("Screenshot preview")
+        preview.transient(self.root)
+        preview.geometry("640x480")
+        preview.minsize(360, 260)
+
+        from PIL import ImageTk
+        display = image.copy()
+        display.thumbnail((600, 360))
+        photo = ImageTk.PhotoImage(display)
+        label = ttk.Label(preview, image=photo)
+        label.image = photo
+        label.pack(fill="both", expand=True, padx=12, pady=12)
+
+        buttons = ttk.Frame(preview, padding=10)
+        buttons.pack(fill="x")
+        ttk.Button(buttons, text="Save screenshot", command=lambda: (self.save_image(image), preview.destroy())).pack(side="right")
+        ttk.Button(buttons, text="Discard", command=preview.destroy).pack(side="right", padx=8)
+
+    def save_image(self, image):
+        try:
+            folder = Path(self.save_dir.get()).expanduser()
+            folder.mkdir(parents=True, exist_ok=True)
+            fmt = self.image_format.get().upper()
+            ext = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png", "BMP": ".bmp", "TIFF": ".tiff"}[fmt]
+            path = folder / f"Screenshot_{datetime.now():%Y-%m-%d_%H-%M-%S}{ext}"
+            output = image
+            options = {}
+            if fmt == "JPEG":
+                output = image.convert("RGB")
+                options["quality"] = int(self.quality.get())
+            elif fmt == "WEBP":
+                options["quality"] = int(self.quality.get())
+            output.save(path, format=fmt, **options)
+            self.status.set(f"Saved: {path}")
+            self.save_settings()
+        except Exception as exc:
+            messagebox.showerror("Save failed", str(exc))
+
+    def startup_link(self):
+        return Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "ScreenShutter.lnk"
+
+    def toggle_startup(self):
+        try:
+            link = self.startup_link()
+            if self.startup.get():
+                import sys
+                import win32com.client
+                shell = win32com.client.Dispatch("WScript.Shell")
+                shortcut = shell.CreateShortCut(str(link))
+                shortcut.Targetpath = sys.executable
+                shortcut.Arguments = f'"{Path(__file__).resolve()}"'
+                shortcut.WorkingDirectory = str(Path(__file__).resolve().parent)
+                shortcut.Description = "ScreenShutter screenshot utility"
+                shortcut.Save()
+            elif link.exists():
+                link.unlink()
+            self.save_settings()
+        except Exception as exc:
+            self.startup.set(False)
+            messagebox.showerror("Startup setting failed", f"{exc}
+
+Install pywin32 to manage the startup shortcut.")
+
+    def load_settings(self):
+        if not self.settings_file.exists():
+            return
+        try:
+            values = {}
+            for line in self.settings_file.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    values[key] = value
+            self.save_dir.set(values.get("save_dir", self.save_dir.get()))
+            self.image_format.set(values.get("format", "PNG"))
+            self.quality.set(int(values.get("quality", "90")))
+            self.hotkey.set(values.get("hotkey", DEFAULT_HOTKEY))
+            self.startup.set(values.get("startup", "0") == "1")
+        except Exception:
+            pass
+
+    def save_settings(self):
+        data = [
+            f"save_dir={self.save_dir.get()}",
+            f"format={self.image_format.get()}",
+            f"quality={int(self.quality.get())}",
+            f"hotkey={self.hotkey.get()}",
+            f"startup={1 if self.startup.get() else 0}",
+        ]
+        self.settings_file.write_text("\n".join(data) + "\n", encoding="utf-8")
+
+    def close(self):
+        self.save_settings()
+        self.hotkey_listener.stop()
+        self.root.destroy()
+
+
+def main():
+    if os.name != "nt":
+        raise SystemExit("ScreenShutter currently supports Windows only.")
+    import ctypes.wintypes
+    root = tk.Tk()
+    app = ScreenShutter(root)
+    root.protocol("WM_DELETE_WINDOW", app.close)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
