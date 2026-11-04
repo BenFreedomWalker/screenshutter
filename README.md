@@ -12,7 +12,7 @@ A lightweight Windows screenshot utility built with Python and Tkinter.
 - Adjustable JPEG/WEBP quality
 - Configurable screenshot folder
 - Optional Windows startup shortcut
-- Preview before saving
+- Optional preview before saving, with direct-to-file capture mode
 - System-tray icon with **Open ScreenShutter** and **Exit** actions
 - Closing the settings window keeps ScreenShutter running in the tray; **Fully Exit** quits it
 
