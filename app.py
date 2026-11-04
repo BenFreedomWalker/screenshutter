@@ -26,8 +26,8 @@ HOTKEY_ID = 1
 
 MONITOR_DEFAULTTONEAREST = 2
 SWP_SHOWWINDOW = 0x0040
-HWND_TOP = 0
-HWND_TOPMOST = -1
+HWND_TOP = ctypes.c_void_p(0)
+HWND_TOPMOST = ctypes.c_void_p(-1)
 SM_XVIRTUALSCREEN = 76
 SM_YVIRTUALSCREEN = 77
 SM_CXVIRTUALSCREEN = 78
@@ -317,7 +317,7 @@ class ScreenShutter:
         work = info.rcWork
         x = max(work.left, min(point.x - width // 2, work.right - width))
         y = max(work.top, min(point.y - height // 2, work.bottom - height))
-        hwnd = self.root.winfo_id()
+        hwnd = user32.GetAncestor(self.root.winfo_id(), 2) or self.root.winfo_id()
         user32.SetWindowPos(hwnd, HWND_TOP, x, y, width, height, SWP_SHOWWINDOW)
 
     def show_window(self):
