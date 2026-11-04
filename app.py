@@ -177,6 +177,12 @@ class ScreenShutter:
     def __init__(self, root, start_hidden=False):
         self.root = root
         self.root.title("ScreenShutter")
+        self.icon_path = Path(__file__).resolve().parent / "assets" / "screenshutter.ico"
+        if self.icon_path.is_file():
+            try:
+                self.root.iconbitmap(default=str(self.icon_path))
+            except tk.TclError:
+                pass
         self.window_geometry = "560x600"
         self.root.geometry(self.window_geometry)
         self.root.minsize(520, 560)
@@ -378,13 +384,16 @@ class ScreenShutter:
         self.root.after(100, self.process_queue)
 
     def start_tray_icon(self):
-        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((4, 4, 60, 60), radius=12, fill="#202938")
-        draw.rounded_rectangle((13, 15, 51, 43), radius=4, fill="#edf4fb")
-        draw.ellipse((23, 20, 41, 38), fill="#168bd2")
-        draw.rounded_rectangle((25, 46, 39, 50), radius=2, fill="#edf4fb")
-        draw.rounded_rectangle((20, 51, 44, 55), radius=2, fill="#edf4fb")
+        if self.icon_path.is_file():
+            image = Image.open(self.icon_path).convert("RGBA")
+        else:
+            image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rounded_rectangle((4, 4, 60, 60), radius=12, fill="#202938")
+            draw.rounded_rectangle((13, 15, 51, 43), radius=4, fill="#edf4fb")
+            draw.ellipse((23, 20, 41, 38), fill="#168bd2")
+            draw.rounded_rectangle((25, 46, 39, 50), radius=2, fill="#edf4fb")
+            draw.rounded_rectangle((20, 51, 44, 55), radius=2, fill="#edf4fb")
 
         menu = pystray.Menu(
             pystray.MenuItem("Open ScreenShutter", self.tray_show, default=True),
