@@ -184,8 +184,11 @@ class ScreenShutter:
         settings.columnconfigure(1, weight=1)
 
         ttk.Label(outer, textvariable=self.status, anchor="w").pack(fill="x", pady=(12, 0))
-        ttk.Label(outer, text="Tip: close this window to keep ScreenShutter running in the background.",
-                  foreground="#666", wraplength=470).pack(anchor="w", pady=(5, 0))
+        footer = ttk.Frame(outer)
+        footer.pack(fill="x", pady=(5, 0))
+        ttk.Label(footer, text="Close this window to keep ScreenShutter running in the background.",
+                  foreground="#666", wraplength=360).pack(side="left", anchor="w")
+        ttk.Button(footer, text="Exit", command=self.close).pack(side="right")
 
     def update_quality_label(self, _value=None):
         self.quality_label.configure(text=str(int(float(self.quality.get()))))
@@ -416,7 +419,6 @@ def main():
     import ctypes.wintypes
     root = tk.Tk()
     app = ScreenShutter(root)
-    root.protocol("WM_DELETE_WINDOW", app.close)
     root.mainloop()
 
 
