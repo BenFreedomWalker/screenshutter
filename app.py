@@ -115,8 +115,8 @@ class ScreenShutter:
     def __init__(self, root):
         self.root = root
         self.root.title("ScreenShutter")
-        self.root.geometry("520x440")
-        self.root.minsize(480, 400)
+        self.root.geometry("520x460")
+        self.root.minsize(480, 420)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
 
         self.settings_dir = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
@@ -132,6 +132,7 @@ class ScreenShutter:
         self.hotkey_listener = HotkeyListener(self.hotkey_pressed)
         self.hotkey_queue = queue.Queue()
         self.tray_icon = None
+        self.tray_thread = None
 
         self.load_settings()
         self.build_ui()
@@ -247,7 +248,10 @@ class ScreenShutter:
             pystray.MenuItem("Exit", self.tray_exit),
         )
         self.tray_icon = pystray.Icon(APP_NAME, image, APP_NAME, menu)
-        self.tray_icon.run_detached()
+        # Keep the tray event loop independent from Tk and keep it alive while
+        # the main window is withdrawn.
+        self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
+        self.tray_thread.start()
 
     def tray_show(self, _icon=None, _item=None):
         self.hotkey_queue.put("show")
@@ -261,6 +265,8 @@ class ScreenShutter:
         self.root.focus_force()
 
     def hide_window(self):
+        # Withdraw the window without destroying Tk; mainloop must keep running
+        # so the tray icon and global shortcut remain available.
         self.save_settings()
         self.root.withdraw()
 
