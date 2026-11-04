@@ -47,6 +47,17 @@ class MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.wintypes.DWORD), ("rcMonitor", RECT),
                 ("rcWork", RECT), ("dwFlags", ctypes.wintypes.DWORD)]
 
+user32.GetCursorPos.argtypes = [ctypes.POINTER(POINT)]
+user32.GetCursorPos.restype = ctypes.wintypes.BOOL
+user32.MonitorFromPoint.argtypes = [POINT, ctypes.wintypes.DWORD]
+user32.MonitorFromPoint.restype = ctypes.wintypes.HANDLE
+user32.GetMonitorInfoW.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(MONITORINFO)]
+user32.GetMonitorInfoW.restype = ctypes.wintypes.BOOL
+user32.SetWindowPos.argtypes = [ctypes.wintypes.HWND, ctypes.wintypes.HWND, ctypes.wintypes.INT,
+                                ctypes.wintypes.INT, ctypes.wintypes.INT, ctypes.wintypes.INT,
+                                ctypes.wintypes.UINT]
+user32.SetWindowPos.restype = ctypes.wintypes.BOOL
+
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
@@ -470,8 +481,12 @@ class ScreenShutter:
                 shell = win32com.client.Dispatch("WScript.Shell")
                 shortcut = shell.CreateShortCut(str(link))
                 shortcut.Targetpath = sys.executable
-                shortcut.Arguments = f'"{Path(__file__).resolve()}"'
-                shortcut.WorkingDirectory = str(Path(__file__).resolve().parent)
+                if "__compiled__" in globals():
+                    shortcut.Arguments = ""
+                    shortcut.WorkingDirectory = str(Path(sys.executable).resolve().parent)
+                else:
+                    shortcut.Arguments = f'"{Path(__file__).resolve()}"'
+                    shortcut.WorkingDirectory = str(Path(__file__).resolve().parent)
                 shortcut.Description = "ScreenShutter screenshot utility"
                 shortcut.Save()
             elif link.exists():
