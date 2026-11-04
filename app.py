@@ -23,6 +23,8 @@ MOD_NOREPEAT = 0x4000
 WM_HOTKEY = 0x0312
 WM_QUIT = 0x0012
 HOTKEY_ID = 1
+PRINTSCREEN_HOTKEY_ID = 2
+PRINTSCREEN_VK = 0x2C
 
 MONITOR_DEFAULTTONEAREST = 2
 SWP_SHOWWINDOW = 0x0040
@@ -100,6 +102,8 @@ def parse_hotkey(spec):
         vk = ord(key_name.upper())
     else:
         raise ValueError("Unsupported key. Try a letter, number, F1-F12, or Print Screen.")
+    if vk == PRINTSCREEN_VK and modifiers == 0:
+        raise ValueError("Print Screen is reserved for the selected screenshot mode. Choose a shortcut with at least one modifier.")
     return modifiers | MOD_NOREPEAT, vk
 
 
@@ -121,19 +125,32 @@ class HotkeyListener:
 
         def worker():
             self.thread_id = kernel32.GetCurrentThreadId()
-            if not user32.RegisterHotKey(None, HOTKEY_ID, modifiers, vk):
-                self.error = ctypes.WinError()
+            registered = []
+            try:
+                if not user32.RegisterHotKey(None, HOTKEY_ID, modifiers, vk):
+                    raise ctypes.WinError()
+                registered.append(HOTKEY_ID)
+                # Print Screen always performs the currently selected capture mode.
+                if not user32.RegisterHotKey(None, PRINTSCREEN_HOTKEY_ID, MOD_NOREPEAT, PRINTSCREEN_VK):
+                    raise ctypes.WinError()
+                registered.append(PRINTSCREEN_HOTKEY_ID)
                 self.ready.set()
-                return
-            self.ready.set()
-            msg = ctypes.wintypes.MSG()
-            while self.running:
-                result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
-                if result <= 0:
-                    break
-                if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
-                    self.callback()
-            user32.UnregisterHotKey(None, HOTKEY_ID)
+                msg = ctypes.wintypes.MSG()
+                while self.running:
+                    result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                    if result <= 0:
+                        break
+                    if msg.message == WM_HOTKEY:
+                        if msg.wParam == HOTKEY_ID:
+                            self.callback("window")
+                        elif msg.wParam == PRINTSCREEN_HOTKEY_ID:
+                            self.callback("printscreen")
+            except Exception as exc:
+                self.error = exc
+                self.ready.set()
+            finally:
+                for hotkey_id in registered:
+                    user32.UnregisterHotKey(None, hotkey_id)
 
         self.thread = threading.Thread(target=worker, daemon=True)
         self.thread.start()
@@ -152,9 +169,9 @@ class ScreenShutter:
     def __init__(self, root):
         self.root = root
         self.root.title("ScreenShutter")
-        self.window_geometry = "520x480"
+        self.window_geometry = "560x560"
         self.root.geometry(self.window_geometry)
-        self.root.minsize(480, 440)
+        self.root.minsize(520, 520)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
 
         self.settings_dir = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
@@ -165,6 +182,7 @@ class ScreenShutter:
         self.image_format = tk.StringVar(value="PNG")
         self.quality = tk.IntVar(value=90)
         self.hotkey = tk.StringVar(value=DEFAULT_HOTKEY)
+        self.printscreen_mode = tk.StringVar(value="Full screen")
         self.startup = tk.BooleanVar(value=False)
         self.status = tk.StringVar(value="Ready")
         self.hotkey_listener = HotkeyListener(self.hotkey_pressed)
@@ -216,14 +234,20 @@ class ScreenShutter:
         self.quality_label = ttk.Label(quality_row, text="90", width=4)
         self.quality_label.pack(side="left", padx=(8, 0))
 
-        ttk.Label(settings, text="Global shortcut").grid(row=3, column=0, sticky="w", pady=5)
+        ttk.Label(settings, text="Print Screen action").grid(row=3, column=0, sticky="w", pady=5)
+        mode_box = ttk.Combobox(settings, textvariable=self.printscreen_mode,
+                                values=("Full screen", "Active window", "Select region"),
+                                state="readonly", width=18)
+        mode_box.grid(row=3, column=1, sticky="w", padx=8)
+
+        ttk.Label(settings, text="Window shortcut").grid(row=4, column=0, sticky="w", pady=5)
         shortcut_row = ttk.Frame(settings)
-        shortcut_row.grid(row=3, column=1, columnspan=2, sticky="ew", padx=8)
+        shortcut_row.grid(row=4, column=1, columnspan=2, sticky="ew", padx=8)
         ttk.Entry(shortcut_row, textvariable=self.hotkey).pack(side="left", fill="x", expand=True)
         ttk.Button(shortcut_row, text="Apply", command=self.register_hotkey).pack(side="left", padx=(6, 0))
 
         ttk.Checkbutton(settings, text="Start ScreenShutter with Windows", variable=self.startup,
-                        command=self.toggle_startup).grid(row=4, column=1, columnspan=2, sticky="w", pady=8)
+                        command=self.toggle_startup).grid(row=5, column=1, columnspan=2, sticky="w", pady=8)
         settings.columnconfigure(1, weight=1)
 
         ttk.Label(outer, textvariable=self.status, anchor="w").pack(fill="x", pady=(12, 0))
@@ -256,15 +280,17 @@ class ScreenShutter:
                 f"Could not register {self.hotkey.get()}.\n\n{exc}"
             )
 
-    def hotkey_pressed(self):
-        self.hotkey_queue.put("show")
+    def hotkey_pressed(self, action):
+        self.hotkey_queue.put(action)
 
     def process_queue(self):
         try:
             while True:
                 action = self.hotkey_queue.get_nowait()
-                if action == "show":
+                if action == "window":
                     self.show_window()
+                elif action == "printscreen":
+                    self.capture_selected_mode()
                 elif action == "exit":
                     self.close()
                     return
@@ -339,6 +365,15 @@ class ScreenShutter:
         self.root.geometry("1x1-100-100")
         self.root.attributes("-alpha", 0.0)
         self.root.update_idletasks()
+
+    def capture_selected_mode(self):
+        mode = self.printscreen_mode.get()
+        if mode == "Active window":
+            self.capture_window()
+        elif mode == "Select region":
+            self.select_region()
+        else:
+            self.capture_full()
 
     def capture_full(self):
         self.root.withdraw()
@@ -524,6 +559,7 @@ class ScreenShutter:
             self.image_format.set(values.get("format", "PNG"))
             self.quality.set(int(values.get("quality", "90")))
             self.hotkey.set(values.get("hotkey", DEFAULT_HOTKEY))
+            self.printscreen_mode.set(values.get("printscreen_mode", "Full screen"))
             self.startup.set(values.get("startup", "0") == "1")
         except Exception:
             pass
@@ -534,6 +570,7 @@ class ScreenShutter:
             f"format={self.image_format.get()}",
             f"quality={int(self.quality.get())}",
             f"hotkey={self.hotkey.get()}",
+            f"printscreen_mode={self.printscreen_mode.get()}",
             f"startup={1 if self.startup.get() else 0}",
         ]
         self.settings_file.write_text("\n".join(data) + "\n", encoding="utf-8")
