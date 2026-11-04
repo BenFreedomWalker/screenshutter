@@ -165,6 +165,8 @@ class HotkeyListener:
         self.running = False
         if self.thread_id:
             user32.PostThreadMessageW(self.thread_id, WM_QUIT, 0, 0)
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=1.5)
         self.thread_id = None
 
 
@@ -290,7 +292,7 @@ class ScreenShutter:
         try:
             while True:
                 action = self.hotkey_queue.get_nowait()
-                if action == "window":
+                if action in ("window", "show"):
                     self.show_window()
                 elif action == "printscreen":
                     self.capture_selected_mode()
