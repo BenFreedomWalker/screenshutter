@@ -6,6 +6,12 @@ set "PROJECT_DIR=%~dp0"
 set "VENV_DIR=%PROJECT_DIR%.venv"
 set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 
+if not exist "%PROJECT_DIR%assets\screenshutter.ico" (
+    echo ERROR: assets\screenshutter.ico was not found.
+    pause
+    exit /b 1
+)
+
 if not exist "%PROJECT_DIR%app.py" (
     echo ERROR: app.py was not found in:
     echo %PROJECT_DIR%
@@ -74,6 +80,8 @@ echo.
 "%VENV_PYTHON%" -m nuitka %MODE% ^
     --enable-plugin=tk-inter ^
     --windows-console-mode=disable ^
+    --windows-icon-from-ico="%PROJECT_DIR%assets\screenshutter.ico" ^
+    --include-data-files="%PROJECT_DIR%assets\screenshutter.ico=assets/screenshutter.ico" ^
     --output-dir="%PROJECT_DIR%build" ^
     --output-filename=ScreenShutter.exe ^
     --include-package=pystray ^
