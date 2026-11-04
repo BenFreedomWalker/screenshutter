@@ -208,9 +208,10 @@ class ScreenShutter:
             self.status.set(f"Shortcut active: {self.hotkey.get()}")
         except Exception as exc:
             self.status.set(f"Could not register shortcut: {exc}")
-            messagebox.showerror("Shortcut error", f"Could not register {self.hotkey.get()}.
-
-{exc}")
+            messagebox.showerror(
+                "Shortcut error",
+                f"Could not register {self.hotkey.get()}.\n\n{exc}"
+            )
 
     def hotkey_pressed(self):
         self.hotkey_queue.put("show")
@@ -376,9 +377,10 @@ class ScreenShutter:
             self.save_settings()
         except Exception as exc:
             self.startup.set(False)
-            messagebox.showerror("Startup setting failed", f"{exc}
-
-Install pywin32 to manage the startup shortcut.")
+            messagebox.showerror(
+                "Startup setting failed",
+                f"{exc}\n\nInstall pywin32 to manage the startup shortcut."
+            )
 
     def load_settings(self):
         if not self.settings_file.exists():
