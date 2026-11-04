@@ -9,7 +9,8 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from PIL import ImageGrab
+import pystray
+from PIL import Image, ImageDraw, ImageGrab
 
 APP_NAME = "ScreenShutter"
 DEFAULT_HOTKEY = "Shift+Print Screen"
@@ -130,9 +131,11 @@ class ScreenShutter:
         self.status = tk.StringVar(value="Ready")
         self.hotkey_listener = HotkeyListener(self.hotkey_pressed)
         self.hotkey_queue = queue.Queue()
+        self.tray_icon = None
 
         self.load_settings()
         self.build_ui()
+        self.start_tray_icon()
         self.apply_format_state()
         self.root.after(100, self.process_queue)
         self.root.after(300, self.register_hotkey)
@@ -219,11 +222,38 @@ class ScreenShutter:
     def process_queue(self):
         try:
             while True:
-                self.hotkey_queue.get_nowait()
-                self.root.after(0, self.show_window)
+                action = self.hotkey_queue.get_nowait()
+                if action == "show":
+                    self.show_window()
+                elif action == "exit":
+                    self.close()
+                    return
         except queue.Empty:
             pass
         self.root.after(100, self.process_queue)
+
+    def start_tray_icon(self):
+        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle((4, 4, 60, 60), radius=12, fill="#202938")
+        draw.rounded_rectangle((13, 15, 51, 43), radius=4, fill="#edf4fb")
+        draw.ellipse((23, 20, 41, 38), fill="#168bd2")
+        draw.rounded_rectangle((25, 46, 39, 50), radius=2, fill="#edf4fb")
+        draw.rounded_rectangle((20, 51, 44, 55), radius=2, fill="#edf4fb")
+
+        menu = pystray.Menu(
+            pystray.MenuItem("Open ScreenShutter", self.tray_show, default=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Exit", self.tray_exit),
+        )
+        self.tray_icon = pystray.Icon(APP_NAME, image, APP_NAME, menu)
+        self.tray_icon.run_detached()
+
+    def tray_show(self, _icon=None, _item=None):
+        self.hotkey_queue.put("show")
+
+    def tray_exit(self, _icon=None, _item=None):
+        self.hotkey_queue.put("exit")
 
     def show_window(self):
         self.root.deiconify()
@@ -412,6 +442,9 @@ class ScreenShutter:
     def close(self):
         self.save_settings()
         self.hotkey_listener.stop()
+        if self.tray_icon:
+            self.tray_icon.stop()
+            self.tray_icon = None
         self.root.destroy()
 
 
