@@ -1,4 +1,5 @@
 import ctypes
+import ctypes.wintypes
 import os
 import queue
 import re
@@ -22,6 +23,29 @@ MOD_NOREPEAT = 0x4000
 WM_HOTKEY = 0x0312
 WM_QUIT = 0x0012
 HOTKEY_ID = 1
+
+MONITOR_DEFAULTTONEAREST = 2
+SWP_SHOWWINDOW = 0x0040
+HWND_TOP = 0
+HWND_TOPMOST = -1
+SM_XVIRTUALSCREEN = 76
+SM_YVIRTUALSCREEN = 77
+SM_CXVIRTUALSCREEN = 78
+SM_CYVIRTUALSCREEN = 79
+
+
+class POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.wintypes.LONG), ("y", ctypes.wintypes.LONG)]
+
+
+class RECT(ctypes.Structure):
+    _fields_ = [("left", ctypes.wintypes.LONG), ("top", ctypes.wintypes.LONG),
+                ("right", ctypes.wintypes.LONG), ("bottom", ctypes.wintypes.LONG)]
+
+
+class MONITORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.wintypes.DWORD), ("rcMonitor", RECT),
+                ("rcWork", RECT), ("dwFlags", ctypes.wintypes.DWORD)]
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -191,9 +215,9 @@ class ScreenShutter:
         ttk.Label(outer, textvariable=self.status, anchor="w").pack(fill="x", pady=(12, 0))
         footer = ttk.Frame(outer)
         footer.pack(fill="x", pady=(5, 0))
-        ttk.Label(footer, text="Close this window to keep ScreenShutter running in the background.",
+        ttk.Label(footer, text="Close this window to keep ScreenShutter running. Use Fully Exit to quit completely.",
                   foreground="#666", wraplength=360).pack(side="left", anchor="w")
-        ttk.Button(footer, text="Exit", command=self.close).pack(side="right")
+        ttk.Button(footer, text="Fully Exit", command=self.close).pack(side="right")
 
     def update_quality_label(self, _value=None):
         self.quality_label.configure(text=str(int(float(self.quality.get()))))
@@ -260,12 +284,35 @@ class ScreenShutter:
     def tray_exit(self, _icon=None, _item=None):
         self.hotkey_queue.put("exit")
 
+    def position_window_at_cursor(self):
+        """Center the main window on the monitor containing the mouse cursor."""
+        point = POINT()
+        if not user32.GetCursorPos(ctypes.byref(point)):
+            return
+        monitor = user32.MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        if not monitor or not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            return
+
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        if width <= 1 or height <= 1:
+            width, height = 520, 480
+        work = info.rcWork
+        x = max(work.left, min(point.x - width // 2, work.right - width))
+        y = max(work.top, min(point.y - height // 2, work.bottom - height))
+        hwnd = self.root.winfo_id()
+        user32.SetWindowPos(hwnd, HWND_TOP, x, y, width, height, SWP_SHOWWINDOW)
+
     def show_window(self):
-        # Restore the real window after it has been made invisible for tray mode.
+        # Restore the real window on the monitor containing the mouse cursor.
         self.root.overrideredirect(False)
         self.root.attributes("-alpha", 1.0)
         self.root.geometry(self.window_geometry)
         self.root.deiconify()
+        self.position_window_at_cursor()
         self.root.lift()
         self.root.focus_force()
 
@@ -313,13 +360,23 @@ class ScreenShutter:
 
     def _open_region_selector(self):
         try:
-            screenshot = ImageGrab.grab(all_screens=True)
+            # Cover the entire Windows virtual desktop, including monitors to
+            # the left/above the primary display (which may have negative X/Y).
+            vx = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+            vy = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+            vw = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+            vh = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+            if vw <= 0 or vh <= 0:
+                raise RuntimeError("Could not determine the virtual desktop size.")
+
             overlay = tk.Toplevel(self.root)
             overlay.overrideredirect(True)
             overlay.attributes("-topmost", True)
-            overlay.attributes("-fullscreen", True)
             overlay.attributes("-alpha", 0.28)
             overlay.configure(bg="black")
+            overlay.geometry(f"{vw}x{vh}+0+0")
+            overlay.update_idletasks()
+            user32.SetWindowPos(overlay.winfo_id(), HWND_TOPMOST, vx, vy, vw, vh, SWP_SHOWWINDOW)
             canvas = tk.Canvas(overlay, cursor="cross", bg="black", highlightthickness=0)
             canvas.pack(fill="both", expand=True)
             start = {"x": 0, "y": 0, "rect": None}
@@ -466,7 +523,11 @@ class ScreenShutter:
 def main():
     if os.name != "nt":
         raise SystemExit("ScreenShutter currently supports Windows only.")
-    import ctypes.wintypes
+    # Per-monitor DPI awareness keeps mouse coordinates, overlays and captures aligned.
+    try:
+        user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
+    except (AttributeError, OSError):
+        pass
     root = tk.Tk()
     app = ScreenShutter(root)
     root.mainloop()
