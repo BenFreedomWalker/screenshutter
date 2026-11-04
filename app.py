@@ -174,7 +174,7 @@ class HotkeyListener:
 
 
 class ScreenShutter:
-    def __init__(self, root):
+    def __init__(self, root, start_hidden=False):
         self.root = root
         self.root.title("ScreenShutter")
         self.window_geometry = "560x600"
@@ -202,7 +202,8 @@ class ScreenShutter:
 
         self.load_settings()
         self.build_ui()
-        self.position_window_at_cursor()
+        if not start_hidden:
+            self.position_window_at_cursor()
         self.start_tray_icon()
         self.apply_format_state()
         self.root.after(100, self.process_queue)
@@ -618,12 +619,12 @@ class ScreenShutter:
                     # In Nuitka onefile mode sys.argv[0] is the outer executable
                     # the user launched; sys.executable may refer to its runtime.
                     target = Path(sys.argv[0]).resolve()
-                    arguments = ""
+                    arguments = "--start-hidden"
                     working_directory = target.parent
                 else:
                     target = Path(sys.executable).resolve()
                     script = Path(__file__).resolve()
-                    arguments = f'"{script}"'
+                    arguments = f'"{script}" --start-hidden'
                     working_directory = script.parent
 
                 link.parent.mkdir(parents=True, exist_ok=True)
@@ -691,8 +692,12 @@ def main():
         user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
     except (AttributeError, OSError):
         pass
+    import sys
+    start_hidden = "--start-hidden" in sys.argv[1:]
     root = tk.Tk()
-    app = ScreenShutter(root)
+    if start_hidden:
+        root.withdraw()
+    app = ScreenShutter(root, start_hidden=start_hidden)
     root.mainloop()
 
 
