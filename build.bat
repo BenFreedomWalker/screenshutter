@@ -2,15 +2,48 @@
 setlocal
 cd /d "%~dp0"
 
-if not exist "%~dp0app.py" (
+set "PROJECT_DIR=%~dp0"
+set "VENV_DIR=%PROJECT_DIR%.venv"
+set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
+
+if not exist "%PROJECT_DIR%app.py" (
     echo ERROR: app.py was not found in:
-    echo %~dp0
+    echo %PROJECT_DIR%
     pause
     exit /b 1
 )
 
-echo Installing ScreenShutter dependencies and Nuitka...
-py -m pip install --upgrade -r "%~dp0requirements.txt" nuitka
+echo.
+echo Checking ScreenShutter virtual environment...
+if not exist "%VENV_PYTHON%" (
+    echo Creating virtual environment in:
+    echo "%VENV_DIR%"
+    py -3 -m venv "%VENV_DIR%"
+    if errorlevel 1 (
+        echo.
+        echo Could not create the virtual environment.
+        pause
+        exit /b 1
+    )
+)
+
+if not exist "%VENV_PYTHON%" (
+    echo ERROR: Virtual environment Python was not created.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Installing ScreenShutter dependencies and Nuitka into the virtual environment...
+"%VENV_PYTHON%" -m pip install --upgrade pip
+if errorlevel 1 (
+    echo.
+    echo Could not upgrade pip.
+    pause
+    exit /b 1
+)
+
+"%VENV_PYTHON%" -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka
 if errorlevel 1 (
     echo.
     echo Dependency installation failed.
@@ -19,16 +52,12 @@ if errorlevel 1 (
 )
 
 set "MODE=--standalone"
-set "OUTPUT=ScreenShutter.dist"
-if /i "%~1"=="onefile" (
-    set "MODE=--onefile"
-    set "OUTPUT=ScreenShutter.exe"
-)
+if /i "%~1"=="onefile" set "MODE=--onefile"
 
 echo.
 echo Cleaning previous ScreenShutter build...
-if exist "%~dp0build" rmdir /s /q "%~dp0build"
-if exist "%~dp0build" (
+if exist "%PROJECT_DIR%build" rmdir /s /q "%PROJECT_DIR%build"
+if exist "%PROJECT_DIR%build" (
     echo Could not clean the previous build directory.
     pause
     exit /b 1
@@ -36,18 +65,21 @@ if exist "%~dp0build" (
 
 echo.
 echo Building ScreenShutter from:
-echo "%~dp0app.py"
+echo "%PROJECT_DIR%app.py"
+echo Using Python:
+echo "%VENV_PYTHON%"
 echo Mode: %MODE%
 echo.
-py -m nuitka %MODE% ^
+
+"%VENV_PYTHON%" -m nuitka %MODE% ^
     --enable-plugin=tk-inter ^
     --windows-console-mode=disable ^
-    --output-dir="%~dp0build" ^
+    --output-dir="%PROJECT_DIR%build" ^
     --output-filename=ScreenShutter.exe ^
     --include-package=pystray ^
     --include-package=PIL ^
     --include-package=win32com.client ^
-    "%~dp0app.py"
+    "%PROJECT_DIR%app.py"
 
 if errorlevel 1 (
     echo.
@@ -58,16 +90,16 @@ if errorlevel 1 (
 
 echo.
 if /i "%~1"=="onefile" (
-    if exist "%~dp0build\ScreenShutter.exe" (
-        echo Build complete: "%~dp0build\ScreenShutter.exe"
+    if exist "%PROJECT_DIR%build\ScreenShutter.exe" (
+        echo Build complete: "%PROJECT_DIR%build\ScreenShutter.exe"
     ) else (
         echo ERROR: Nuitka finished, but ScreenShutter.exe was not found.
         pause
         exit /b 1
     )
 ) else (
-    if exist "%~dp0build\ScreenShutter.dist\ScreenShutter.exe" (
-        echo Build complete: "%~dp0build\ScreenShutter.dist\ScreenShutter.exe"
+    if exist "%PROJECT_DIR%build\ScreenShutter.dist\ScreenShutter.exe" (
+        echo Build complete: "%PROJECT_DIR%build\ScreenShutter.dist\ScreenShutter.exe"
     ) else (
         echo ERROR: Nuitka finished, but the standalone executable was not found.
         pause
