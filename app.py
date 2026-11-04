@@ -117,8 +117,10 @@ class HotkeyListener:
         self.running = False
 
     def start(self, spec):
-        self.stop()
+        # Validate before stopping the active registrations, so a rejected
+        # shortcut never leaves Print Screen unbound.
         modifiers, vk = parse_hotkey(spec)
+        self.stop()
         self.ready.clear()
         self.error = None
         self.running = True
@@ -132,7 +134,8 @@ class HotkeyListener:
                 registered.append(HOTKEY_ID)
                 # Print Screen always performs the currently selected capture mode.
                 if not user32.RegisterHotKey(None, PRINTSCREEN_HOTKEY_ID, MOD_NOREPEAT, PRINTSCREEN_VK):
-                    raise ctypes.WinError()
+                    error = ctypes.WinError()
+                    raise RuntimeError(f"Could not reserve Print Screen for capture. Another application or Windows may be using it. {error}")
                 registered.append(PRINTSCREEN_HOTKEY_ID)
                 self.ready.set()
                 msg = ctypes.wintypes.MSG()
@@ -272,7 +275,7 @@ class ScreenShutter:
     def register_hotkey(self):
         try:
             self.hotkey_listener.start(self.hotkey.get())
-            self.status.set(f"Shortcut active: {self.hotkey.get()}")
+            self.status.set(f"Print Screen: {self.printscreen_mode.get()} | Window shortcut: {self.hotkey.get()}")
         except Exception as exc:
             self.status.set(f"Could not register shortcut: {exc}")
             messagebox.showerror(
