@@ -32,7 +32,7 @@ Run:
 py app.py
 ```
 
-Closing the window minimizes the app to the background. Use the tray-free initial prototype's global shortcut to reopen its settings window. Exit with the window's normal close action only after using the app's process exit mechanism in a future version; the initial prototype currently keeps running in the background.
+Closing the settings window hides ScreenShutter in the background. Press the configured global shortcut to reopen it. Use the **Exit** button in the main window to quit the application.
 
 ## Notes
 
