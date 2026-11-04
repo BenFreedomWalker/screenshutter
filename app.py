@@ -47,6 +47,9 @@ class MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.wintypes.DWORD), ("rcMonitor", RECT),
                 ("rcWork", RECT), ("dwFlags", ctypes.wintypes.DWORD)]
 
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
 user32.GetCursorPos.argtypes = [ctypes.POINTER(POINT)]
 user32.GetCursorPos.restype = ctypes.wintypes.BOOL
 user32.MonitorFromPoint.argtypes = [POINT, ctypes.wintypes.DWORD]
@@ -57,9 +60,8 @@ user32.SetWindowPos.argtypes = [ctypes.wintypes.HWND, ctypes.wintypes.HWND, ctyp
                                 ctypes.wintypes.INT, ctypes.wintypes.INT, ctypes.wintypes.INT,
                                 ctypes.wintypes.UINT]
 user32.SetWindowPos.restype = ctypes.wintypes.BOOL
-
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
+user32.GetAncestor.argtypes = [ctypes.wintypes.HWND, ctypes.wintypes.UINT]
+user32.GetAncestor.restype = ctypes.wintypes.HWND
 
 
 def parse_hotkey(spec):
@@ -382,15 +384,24 @@ class ScreenShutter:
                 raise RuntimeError("Could not determine the virtual desktop size.")
 
             overlay = tk.Toplevel(self.root)
+            overlay.withdraw()
             overlay.overrideredirect(True)
-            overlay.attributes("-topmost", True)
-            overlay.attributes("-alpha", 0.28)
             overlay.configure(bg="black")
-            overlay.geometry(f"{vw}x{vh}+0+0")
-            overlay.update_idletasks()
-            user32.SetWindowPos(overlay.winfo_id(), HWND_TOPMOST, vx, vy, vw, vh, SWP_SHOWWINDOW)
-            canvas = tk.Canvas(overlay, cursor="cross", bg="black", highlightthickness=0)
+            overlay.attributes("-alpha", 0.28)
+            overlay.attributes("-topmost", True)
+
+            canvas = tk.Canvas(overlay, cursor="cross", bg="black", highlightthickness=0,
+                               bd=0, relief="flat")
             canvas.pack(fill="both", expand=True)
+
+            # Position the actual top-level wrapper, not Tk's inner client HWND.
+            overlay.update_idletasks()
+            hwnd = user32.GetAncestor(overlay.winfo_id(), 2) or overlay.winfo_id()
+            if not user32.SetWindowPos(hwnd, HWND_TOPMOST, vx, vy, vw, vh, SWP_SHOWWINDOW):
+                raise ctypes.WinError()
+            overlay.deiconify()
+            overlay.lift()
+            overlay.focus_force()
             start = {"x": 0, "y": 0, "rect": None}
 
             def down(event):
