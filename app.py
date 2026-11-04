@@ -174,9 +174,9 @@ class ScreenShutter:
     def __init__(self, root):
         self.root = root
         self.root.title("ScreenShutter")
-        self.window_geometry = "560x560"
+        self.window_geometry = "560x600"
         self.root.geometry(self.window_geometry)
-        self.root.minsize(520, 520)
+        self.root.minsize(520, 560)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
 
         self.settings_dir = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
@@ -188,6 +188,7 @@ class ScreenShutter:
         self.quality = tk.IntVar(value=90)
         self.hotkey = tk.StringVar(value=DEFAULT_HOTKEY)
         self.printscreen_mode = tk.StringVar(value="Full screen")
+        self.preview_enabled = tk.BooleanVar(value=True)
         self.startup = tk.BooleanVar(value=False)
         self.status = tk.StringVar(value="Ready")
         self.hotkey_listener = HotkeyListener(self.hotkey_pressed)
@@ -251,8 +252,11 @@ class ScreenShutter:
         ttk.Entry(shortcut_row, textvariable=self.hotkey).pack(side="left", fill="x", expand=True)
         ttk.Button(shortcut_row, text="Apply", command=self.register_hotkey).pack(side="left", padx=(6, 0))
 
+        ttk.Checkbutton(settings, text="Show preview before saving", variable=self.preview_enabled,
+                        command=self.save_settings).grid(row=5, column=1, columnspan=2, sticky="w", pady=5)
+
         ttk.Checkbutton(settings, text="Start ScreenShutter with Windows", variable=self.startup,
-                        command=self.toggle_startup).grid(row=5, column=1, columnspan=2, sticky="w", pady=8)
+                        command=self.toggle_startup).grid(row=6, column=1, columnspan=2, sticky="w", pady=5)
         settings.columnconfigure(1, weight=1)
 
         ttk.Label(outer, textvariable=self.status, anchor="w").pack(fill="x", pady=(12, 0))
@@ -387,7 +391,7 @@ class ScreenShutter:
     def _capture_full_delayed(self):
         try:
             image = ImageGrab.grab(all_screens=True)
-            self.show_preview(image)
+            self.finish_capture(image)
         except Exception as exc:
             self.show_window()
             messagebox.showerror("Capture failed", str(exc))
@@ -403,7 +407,7 @@ class ScreenShutter:
             if not hwnd or not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
                 raise RuntimeError("Could not determine the active window bounds.")
             image = ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom), all_screens=True)
-            self.show_preview(image)
+            self.finish_capture(image)
         except Exception as exc:
             self.show_window()
             messagebox.showerror("Capture failed", str(exc))
@@ -465,7 +469,7 @@ class ScreenShutter:
                     self.show_window()
                     return
                 try:
-                    self.show_preview(ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True))
+                    self.finish_capture(ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True))
                 except Exception as exc:
                     self.show_window()
                     messagebox.showerror("Capture failed", str(exc))
@@ -478,6 +482,12 @@ class ScreenShutter:
         except Exception as exc:
             self.show_window()
             messagebox.showerror("Selection failed", str(exc))
+
+    def finish_capture(self, image):
+        if self.preview_enabled.get():
+            self.show_preview(image)
+        else:
+            self.save_image(image)
 
     def show_preview(self, image):
         self.root.deiconify()
@@ -565,6 +575,7 @@ class ScreenShutter:
             self.quality.set(int(values.get("quality", "90")))
             self.hotkey.set(values.get("hotkey", DEFAULT_HOTKEY))
             self.printscreen_mode.set(values.get("printscreen_mode", "Full screen"))
+            self.preview_enabled.set(values.get("preview_enabled", "1") == "1")
             self.startup.set(values.get("startup", "0") == "1")
         except Exception:
             pass
@@ -576,6 +587,7 @@ class ScreenShutter:
             f"quality={int(self.quality.get())}",
             f"hotkey={self.hotkey.get()}",
             f"printscreen_mode={self.printscreen_mode.get()}",
+            f"preview_enabled={1 if self.preview_enabled.get() else 0}",
             f"startup={1 if self.startup.get() else 0}",
         ]
         self.settings_file.write_text("\n".join(data) + "\n", encoding="utf-8")
