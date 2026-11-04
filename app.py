@@ -115,8 +115,9 @@ class ScreenShutter:
     def __init__(self, root):
         self.root = root
         self.root.title("ScreenShutter")
-        self.root.geometry("520x460")
-        self.root.minsize(480, 420)
+        self.window_geometry = "520x480"
+        self.root.geometry(self.window_geometry)
+        self.root.minsize(480, 440)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
 
         self.settings_dir = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
@@ -250,7 +251,7 @@ class ScreenShutter:
         self.tray_icon = pystray.Icon(APP_NAME, image, APP_NAME, menu)
         # Keep the tray event loop independent from Tk and keep it alive while
         # the main window is withdrawn.
-        self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
+        self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=False)
         self.tray_thread.start()
 
     def tray_show(self, _icon=None, _item=None):
@@ -260,15 +261,23 @@ class ScreenShutter:
         self.hotkey_queue.put("exit")
 
     def show_window(self):
+        # Restore the real window after it has been made invisible for tray mode.
+        self.root.overrideredirect(False)
+        self.root.attributes("-alpha", 1.0)
+        self.root.geometry(self.window_geometry)
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
 
     def hide_window(self):
-        # Withdraw the window without destroying Tk; mainloop must keep running
-        # so the tray icon and global shortcut remain available.
+        # Keep the Tk window mapped but fully transparent and off-screen.
+        # This keeps Tk's event loop alive on Windows while removing the
+        # application window from the taskbar; the tray icon remains available.
         self.save_settings()
-        self.root.withdraw()
+        self.root.overrideredirect(True)
+        self.root.geometry("1x1-100-100")
+        self.root.attributes("-alpha", 0.0)
+        self.root.update_idletasks()
 
     def capture_full(self):
         self.root.withdraw()
