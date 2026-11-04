@@ -172,6 +172,7 @@ class ScreenShutter:
 
         self.load_settings()
         self.build_ui()
+        self.position_window_at_cursor()
         self.start_tray_icon()
         self.apply_format_state()
         self.root.after(100, self.process_queue)
