@@ -288,8 +288,8 @@ class ScreenShutter:
         window = tk.Toplevel(self.root)
         self.about_window = window
         window.title("About ScreenShutter")
-        window.geometry("760x640")
-        window.minsize(560, 420)
+        window.geometry("760x720")
+        window.minsize(560, 500)
         window.transient(self.root)
 
         heading = ttk.Frame(window, padding=(16, 14, 16, 8))
@@ -299,6 +299,32 @@ class ScreenShutter:
         ttk.Label(heading, text="Licensed under the GNU General Public License, version 3.").pack(
             anchor="w", pady=(6, 0)
         )
+
+        support_frame = ttk.LabelFrame(window, text="Support development", padding=10)
+        support_frame.pack(fill="x", padx=16, pady=(4, 10))
+        ttk.Label(
+            support_frame,
+            text="Enjoying ScreenShutter? Support me on Keeper.",
+        ).pack(anchor="w", pady=(0, 7))
+
+        wallet_row = ttk.Frame(support_frame)
+        wallet_row.pack(fill="x")
+        ttk.Label(wallet_row, text="GRAM address:").pack(side="left")
+        gram_address = "UQBYSIOzAMkxo1ZWbsFbg7-1vZd2cZbXsEQqYJzlNq5b1_Y1"
+        wallet_entry = ttk.Entry(wallet_row)
+        wallet_entry.insert(0, gram_address)
+        wallet_entry.configure(state="readonly")
+        wallet_entry.pack(side="left", fill="x", expand=True, padx=8)
+
+        def copy_gram_address():
+            window.clipboard_clear()
+            window.clipboard_append(gram_address)
+            window.update()
+            copy_button.configure(text="Copied")
+            window.after(1500, lambda: copy_button.configure(text="Copy"))
+
+        copy_button = ttk.Button(wallet_row, text="Copy", command=copy_gram_address)
+        copy_button.pack(side="right")
 
         license_frame = ttk.LabelFrame(window, text="GNU General Public License v3", padding=8)
         license_frame.pack(fill="both", expand=True, padx=16, pady=(4, 10))
