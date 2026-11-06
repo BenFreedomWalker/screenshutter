@@ -323,7 +323,7 @@ class ScreenShutter:
         ttk.Label(issue_frame, text="Found a problem? Please report it here:").pack(anchor="w")
         issue_link = ttk.Label(
             issue_frame,
-            text="https://github.com/awkbashgrepsed/screenshutter/issues",
+            text="https://github.com/BenFreedomWalker/screenshutter/issues",
             foreground="#0969da",
             cursor="hand2",
         )
@@ -331,7 +331,7 @@ class ScreenShutter:
         issue_link.bind(
             "<Button-1>",
             lambda _event: webbrowser.open_new_tab(
-                "https://github.com/awkbashgrepsed/screenshutter/issues"
+                "https://github.com/BenFreedomWalker/screenshutter/issues"
             ),
         )
         ttk.Button(issue_frame, text="Close", command=window.destroy).pack(side="right")
