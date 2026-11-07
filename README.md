@@ -42,7 +42,7 @@
 
 - **[Download the source code](https://github.com/BenFreedomWalker/screenshutter/archive/refs/heads/main.zip)**
 
-Looking for a ready-to-use Windows executable? Check the [Releases page](https://github.com/BenFreedomWalker/screenshutter/releases). If no build is available there, you can build ScreenShutter from source using the instructions below.
+Check the [Releases page](https://github.com/BenFreedomWalker/screenshutter/releases) for a ready-to-use Windows executable.
 
 ## Installation
 
