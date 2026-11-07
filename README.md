@@ -41,7 +41,6 @@
 ## Download
 
 - **[Download the source code](https://github.com/BenFreedomWalker/screenshutter/archive/refs/heads/main.zip)**
-- **[Browse the repository](https://github.com/BenFreedomWalker/screenshutter)**
 
 A packaged Windows executable can be published through the [Releases page](https://github.com/BenFreedomWalker/screenshutter/releases) when a release is available.
 
