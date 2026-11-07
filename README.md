@@ -113,7 +113,13 @@ The window shortcut and the dedicated capture key use the Win32 `RegisterHotKey`
 
 ## Screenshots
 
-Screenshots of the main window and capture workflow will be added here.
+<p align="center">
+  <img src="assets/main-window.webp" width="542" alt="ScreenShutter main window showing capture modes and screenshot settings">
+</p>
+
+<p align="center">
+  <em>ScreenShutter's main window — capture modes, output format, quality, shortcuts, and startup settings.</em>
+</p>
 
 ## Contributing and support
 
