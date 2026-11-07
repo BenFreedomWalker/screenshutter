@@ -1,22 +1,53 @@
 # ScreenShutter
 
-A lightweight Windows screenshot utility built with Python and Tkinter.
+<p align="center">
+  <strong>A lightweight screenshot utility for Windows.</strong><br>
+  Capture your entire screen, the active window, or a selected region — then save it in the format you want.
+</p>
+
+<p align="center">
+  <a href="https://github.com/BenFreedomWalker/screenshutter/stargazers"><img src="https://img.shields.io/github/stars/BenFreedomWalker/screenshutter?style=flat&label=Stars" alt="GitHub stars"></a>
+  <a href="https://github.com/BenFreedomWalker/screenshutter/issues"><img src="https://img.shields.io/github/issues/BenFreedomWalker/screenshutter?style=flat&label=Issues" alt="GitHub issues"></a>
+  <a href="https://github.com/BenFreedomWalker/screenshutter/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="GPL-3.0 license"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B-0078D6?logo=windows&logoColor=white" alt="Windows 10 or later">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python 3.10 or later">
+</p>
+
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/python.svg" width="30" height="30" alt="Python">
+  &nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/Tkinter-GUI-555555" alt="Tkinter">
+  &nbsp;
+  <img src="https://img.shields.io/badge/Pillow-Image%20processing-555555" alt="Pillow">
+  &nbsp;
+  <img src="https://img.shields.io/badge/Nuitka-Compiler-555555" alt="Nuitka">
+</p>
+
+---
 
 ## Features
 
-- Full-screen, active-window, and drag-to-select region capture across the full virtual desktop
-- Main window opens centered on the monitor containing the mouse cursor
-- Press `Print Screen` to run the selected capture mode (full screen, active window, or region)
-- Configurable shortcut for reopening the main window (default: `Shift+Print Screen`); bare `Print Screen` is reserved for capture
-- PNG, JPEG, WEBP, BMP, and TIFF output
-- Adjustable JPEG/WEBP quality
-- Configurable screenshot folder
-- Optional Windows startup shortcut
-- Optional preview before saving, with direct-to-file capture mode
-- System-tray icon with **Open ScreenShutter** and **Exit** actions
-- Closing the settings window keeps ScreenShutter running in the tray; **Fully Exit** quits it
+- **Three capture modes:** full screen, active window, and drag-to-select region.
+- **Multi-monitor support:** captures across the full virtual desktop.
+- **Quick capture:** press `Print Screen` to run the selected capture mode.
+- **Customizable shortcuts:** configure a shortcut to reopen the main window (default: `Shift+Print Screen`).
+- **Multiple image formats:** PNG, JPEG, WEBP, BMP, and TIFF.
+- **Image quality control:** adjust JPEG and WEBP quality.
+- **Flexible saving:** choose your screenshot folder.
+- **Preview or direct save:** review captures before saving, or send them straight to a file.
+- **System tray:** keep ScreenShutter running in the background and reopen it when needed.
+- **Optional startup:** create a Windows startup shortcut.
 
-## Requirements
+## Download
+
+- **[Download the source code](https://github.com/BenFreedomWalker/screenshutter/archive/refs/heads/main.zip)**
+- **[Browse the repository](https://github.com/BenFreedomWalker/screenshutter)**
+
+A packaged Windows executable can be published through the [Releases page](https://github.com/BenFreedomWalker/screenshutter/releases) when a release is available.
+
+## Installation
+
+### Requirements
 
 - Windows 10 or later
 - Python 3.10+
@@ -25,13 +56,13 @@ A lightweight Windows screenshot utility built with Python and Tkinter.
 - pywin32
 - pystray
 
-Install dependencies:
+Install the dependencies:
 
 ```bat
 py -m pip install -r requirements.txt
 ```
 
-Run from source:
+Run ScreenShutter from source:
 
 ```bat
 py app.py
@@ -39,27 +70,71 @@ py app.py
 
 ## Build with Nuitka
 
-Run:
+Run the build script:
 
 ```bat
 build.bat
 ```
 
-This creates a standalone build at `build\ScreenShutter.dist\ScreenShutter.exe`.
+This creates a standalone build at:
 
-For a single-file executable instead:
+```text
+build\\ScreenShutter.dist\\ScreenShutter.exe
+```
+
+To build a single-file executable instead:
 
 ```bat
 build.bat onefile
 ```
 
-The one-file executable is written to `build\ScreenShutter.exe`. The build script installs the project dependencies and Nuitka before compiling. Run the build on Windows; cross-compiling from Linux is not supported.
+The one-file executable is written to:
 
-## Tray behavior
+```text
+build\\ScreenShutter.exe
+```
 
-- Closing the main window hides it to the system tray.
-- Use **Open ScreenShutter** in the tray menu or press the configured window shortcut to reopen it.
-- Press `Print Screen` to capture using the mode selected in **Print Screen action**.
-- Use **Fully Exit** in the main window or **Exit** in the tray menu to terminate the process.
+The build script creates a virtual environment, installs the project dependencies and Nuitka, and then builds the application. Run the build on Windows; cross-compiling from Linux is not supported.
 
-The window shortcut and the dedicated `Print Screen` capture key use the Win32 `RegisterHotKey` API. Windows may reject either key if another application or Windows feature has already claimed it. The window shortcut cannot be set to bare `Print Screen`.
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Print Screen` | Capture using the selected capture mode |
+| `Shift+Print Screen` | Reopen the ScreenShutter window (default; configurable) |
+
+The window shortcut and the dedicated capture key use the Win32 `RegisterHotKey` API. Windows may reject a shortcut if another application or Windows feature has already claimed it. The window shortcut cannot be set to bare `Print Screen`.
+
+## System tray
+
+- Closing the main window hides ScreenShutter in the system tray.
+- Select **Open ScreenShutter** from the tray menu or use the configured window shortcut to reopen it.
+- Select **Exit** from the tray menu, or **Fully Exit** in the main window, to terminate the application.
+
+## Screenshots
+
+Screenshots of the main window and capture workflow will be added here.
+
+## Contributing and support
+
+Bug reports, feature requests, and suggestions are welcome.
+
+- [Report a bug](https://github.com/BenFreedomWalker/screenshutter/issues/new)
+- [Request a feature](https://github.com/BenFreedomWalker/screenshutter/issues/new)
+- [Browse existing issues](https://github.com/BenFreedomWalker/screenshutter/issues)
+
+If you want to contribute code, open an issue first to discuss larger changes, then submit a pull request.
+
+## Support development
+
+If ScreenShutter is useful to you and you'd like to support its development, you can send a tip through Keeper using the GRAM address below:
+
+```text
+UQBYSIOzAMkxo1ZWbsFbg7-1vZd2cZbXsEQqYJ
+```
+
+Thank you for supporting independent software development.
+
+## License
+
+ScreenShutter is free and open-source software licensed under the [GNU General Public License v3.0](LICENSE).
