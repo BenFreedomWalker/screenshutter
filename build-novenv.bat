@@ -3,6 +3,19 @@ setlocal
 cd /d "%~dp0"
 
 set "PROJECT_DIR=%~dp0"
+set "MODE=--standalone"
+set "TRUST_ARGS="
+set "SKIP_REQUIREMENTS=0"
+
+:parse_args
+if "%~1"=="" goto args_done
+if /i "%~1"=="onefile" set "MODE=--onefile"
+if /i "%~1"=="--trust" set "TRUST_ARGS=--trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org"
+if /i "%~1"=="--no-requirements" set "SKIP_REQUIREMENTS=1"
+shift
+goto parse_args
+
+:args_done
 
 if not exist "%PROJECT_DIR%assets\screenshutter.ico" (
     echo ERROR: assets\screenshutter.ico was not found.
@@ -28,26 +41,20 @@ if errorlevel 1 (
 )
 
 echo.
-echo Installing ScreenShutter dependencies and Nuitka into the active Python installation...
-py -3 -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka %TRUST_ARGS%
+if "%SKIP_REQUIREMENTS%"=="1" (
+    echo Skipping requirements.txt installation as requested.
+    echo Installing Nuitka only...
+    py -3 -m pip install --upgrade nuitka %TRUST_ARGS%
+) else (
+    echo Installing ScreenShutter requirements and Nuitka into the active Python installation...
+    py -3 -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka %TRUST_ARGS%
+)
 if errorlevel 1 (
     echo.
-    echo Dependency installation failed.
+    echo Package installation failed.
     pause
     exit /b 1
 )
-
-set "MODE=--standalone"
-set "TRUST_ARGS="
-
-:parse_args
-if "%~1"=="" goto args_done
-if /i "%~1"=="onefile" set "MODE=--onefile"
-if /i "%~1"=="--trust" set "TRUST_ARGS=--trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org"
-shift
-goto parse_args
-
-:args_done
 
 echo.
 echo Cleaning previous ScreenShutter build...
@@ -86,7 +93,7 @@ if errorlevel 1 (
 )
 
 echo.
-if /i "%~1"=="onefile" (
+if "%MODE%"=="--onefile" (
     if exist "%PROJECT_DIR%build\ScreenShutter.exe" (
         echo Build complete: "%PROJECT_DIR%build\ScreenShutter.exe"
     ) else (
