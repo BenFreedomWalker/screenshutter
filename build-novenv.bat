@@ -5,13 +5,14 @@ cd /d "%~dp0"
 set "PROJECT_DIR=%~dp0"
 set "MODE=--standalone"
 set "TRUST_ARGS="
-set "SKIP_REQUIREMENTS=0"
+set "SKIP_INSTALL=0"
 
 :parse_args
 if "%~1"=="" goto args_done
 if /i "%~1"=="onefile" set "MODE=--onefile"
 if /i "%~1"=="--trust" set "TRUST_ARGS=--trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org"
-if /i "%~1"=="--no-requirements" set "SKIP_REQUIREMENTS=1"
+if /i "%~1"=="--no-install" set "SKIP_INSTALL=1"
+if /i "%~1"=="--no-requirements" set "SKIP_INSTALL=1"
 shift
 goto parse_args
 
@@ -41,19 +42,17 @@ if errorlevel 1 (
 )
 
 echo.
-if "%SKIP_REQUIREMENTS%"=="1" (
-    echo Skipping requirements.txt installation as requested.
-    echo Installing Nuitka only...
-    py -3 -m pip install --upgrade nuitka %TRUST_ARGS%
+if "%SKIP_INSTALL%"=="1" (
+    echo Skipping all package installation as requested.
 ) else (
     echo Installing ScreenShutter requirements and Nuitka into the active Python installation...
     py -3 -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka %TRUST_ARGS%
-)
-if errorlevel 1 (
-    echo.
-    echo Package installation failed.
-    pause
-    exit /b 1
+    if errorlevel 1 (
+        echo.
+        echo Package installation failed.
+        pause
+        exit /b 1
+    )
 )
 
 echo.
