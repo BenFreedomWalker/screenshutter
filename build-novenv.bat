@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 set "PROJECT_DIR=%~dp0"
-set "MODE=--onedir"
+set "MODE=--standalone"
 set "TRUST_ARGS="
 set "SKIP_INSTALL=0"
 
@@ -25,7 +25,8 @@ if not exist "%PROJECT_DIR%assets\screenshutter.ico" (
 )
 
 if not exist "%PROJECT_DIR%app.py" (
-    echo ERROR: app.py was not found.
+    echo ERROR: app.py was not found in:
+    echo %PROJECT_DIR%
     pause
     exit /b 1
 )
@@ -34,78 +35,78 @@ echo.
 echo Checking system Python...
 py -3 --version
 if errorlevel 1 (
+    echo.
     echo ERROR: Python 3 was not found. Install Python and enable the Python Launcher.
     pause
     exit /b 1
 )
 
+echo.
 if "%SKIP_INSTALL%"=="1" (
-    echo.
     echo Skipping all package installation as requested.
 ) else (
-    echo.
-    echo Installing ScreenShutter requirements and PyInstaller...
-    py -3 -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" pyinstaller %TRUST_ARGS%
+    echo Installing ScreenShutter requirements and Nuitka into the active Python installation...
+    py -3 -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka %TRUST_ARGS%
     if errorlevel 1 (
-        echo ERROR: Package installation failed.
+        echo.
+        echo Package installation failed.
         pause
         exit /b 1
     )
 )
 
 echo.
-echo Cleaning previous PyInstaller output...
+echo Cleaning previous ScreenShutter build...
 if exist "%PROJECT_DIR%build" rmdir /s /q "%PROJECT_DIR%build"
-if exist "%PROJECT_DIR%dist" rmdir /s /q "%PROJECT_DIR%dist"
-if exist "%PROJECT_DIR%ScreenShutter.spec" del /q "%PROJECT_DIR%ScreenShutter.spec"
+if exist "%PROJECT_DIR%build" (
+    echo Could not clean the previous build directory.
+    pause
+    exit /b 1
+)
 
 echo.
-echo Building ScreenShutter with PyInstaller...
+echo Building ScreenShutter from:
+echo "%PROJECT_DIR%app.py"
 echo Using system Python:
 py -3 --version
 echo Mode: %MODE%
 echo.
 
-py -3 -m PyInstaller ^
-    %MODE% ^
-    --noconfirm ^
-    --clean ^
-    --windowed ^
-    --name ScreenShutter ^
-    --icon="%PROJECT_DIR%assets\screenshutter.ico" ^
-    --add-data "%PROJECT_DIR%assets\screenshutter.ico;assets" ^
-    --collect-all pystray ^
-    --hidden-import=win32com.client ^
-    --distpath "%PROJECT_DIR%dist" ^
-    --workpath "%PROJECT_DIR%build\work" ^
-    --specpath "%PROJECT_DIR%" ^
+py -3 -m nuitka %MODE% ^
+    --enable-plugin=tk-inter ^
+    --windows-console-mode=disable ^
+    --windows-icon-from-ico="%PROJECT_DIR%assets\screenshutter.ico" ^
+    --include-data-files="%PROJECT_DIR%assets\screenshutter.ico=assets/screenshutter.ico" ^
+    --output-dir="%PROJECT_DIR%build" ^
+    --output-filename=ScreenShutter.exe ^
+    --include-package=pystray ^
+    --include-package=PIL ^
+    --include-package=win32com.client ^
     "%PROJECT_DIR%app.py"
 
 if errorlevel 1 (
     echo.
-    echo PyInstaller build failed.
+    echo Build failed.
     pause
     exit /b 1
 )
 
+echo.
 if "%MODE%"=="--onefile" (
-    if exist "%PROJECT_DIR%dist\ScreenShutter.exe" (
-        echo.
-        echo Build complete: "%PROJECT_DIR%dist\ScreenShutter.exe"
+    if exist "%PROJECT_DIR%build\ScreenShutter.exe" (
+        echo Build complete: "%PROJECT_DIR%build\ScreenShutter.exe"
     ) else (
-        echo ERROR: ScreenShutter.exe was not found.
+        echo ERROR: Nuitka finished, but ScreenShutter.exe was not found.
         pause
         exit /b 1
     )
 ) else (
-    if exist "%PROJECT_DIR%dist\ScreenShutter\ScreenShutter.exe" (
-        echo.
-        echo Build complete: "%PROJECT_DIR%dist\ScreenShutter\ScreenShutter.exe"
+    if exist "%PROJECT_DIR%build\ScreenShutter.dist\ScreenShutter.exe" (
+        echo Build complete: "%PROJECT_DIR%build\ScreenShutter.dist\ScreenShutter.exe"
     ) else (
-        echo ERROR: ScreenShutter.exe was not found in the onedir output.
+        echo ERROR: Nuitka finished, but the standalone executable was not found.
         pause
         exit /b 1
     )
 )
-
 pause
