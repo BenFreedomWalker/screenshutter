@@ -66,7 +66,7 @@ py -3 --version
 echo Mode: %MODE%
 echo.
 
-py -3 -m PyInstaller %MODE% --noconfirm --clean --windowed --name ScreenShutter --icon="%PROJECT_DIR%assets\screenshutter.ico" --add-data "%PROJECT_DIR%assets\screenshutter.ico;assets" --collect-all pystray --hidden-import=win32com.client --distpath "%PROJECT_DIR%dist" --workpath "%PROJECT_DIR%build\work" --specpath "%PROJECT_DIR%" "%PROJECT_DIR%app.py"
+py -3 -m PyInstaller %MODE% --noconfirm --clean --windowed --name ScreenShutter --icon="%PROJECT_DIR%assets\screenshutter.ico" --add-data "%PROJECT_DIR%assets\screenshutter.ico;assets" --collect-all pystray --hidden-import=win32com.client --distpath "%PROJECT_DIR%dist" --workpath "%PROJECT_DIR%build\work" "%PROJECT_DIR%app.py"
 
 if errorlevel 1 (
     echo.
