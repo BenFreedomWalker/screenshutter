@@ -41,7 +41,7 @@ if not exist "%VENV_PYTHON%" (
 
 echo.
 echo Installing ScreenShutter dependencies and Nuitka into the virtual environment...
-"%VENV_PYTHON%" -m pip install --upgrade pip
+"%VENV_PYTHON%" -m pip install --upgrade pip %TRUST_ARGS%
 if errorlevel 1 (
     echo.
     echo Could not upgrade pip.
@@ -49,7 +49,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-"%VENV_PYTHON%" -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka
+"%VENV_PYTHON%" -m pip install --upgrade -r "%PROJECT_DIR%requirements.txt" nuitka %TRUST_ARGS%
 if errorlevel 1 (
     echo.
     echo Dependency installation failed.
@@ -58,7 +58,16 @@ if errorlevel 1 (
 )
 
 set "MODE=--standalone"
+set "TRUST_ARGS="
+
+:parse_args
+if "%~1"=="" goto args_done
 if /i "%~1"=="onefile" set "MODE=--onefile"
+if /i "%~1"=="--trust" set "TRUST_ARGS=--trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org"
+shift
+goto parse_args
+
+:args_done
 
 echo.
 echo Cleaning previous ScreenShutter build...
